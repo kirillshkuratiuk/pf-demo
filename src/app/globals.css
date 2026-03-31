@@ -1,26 +1,83 @@
-@import "tailwindcss";
-
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/* === Override PF's font-face to prevent 404 blocking on mobile === */
+@font-face {
+  font-family: "PredictFolio Font";
+  src: local("Inter"), local("-apple-system"), local("system-ui");
+  font-weight: 100 900;
+  font-display: swap;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+/* === Overrides for PredictFolio CSS on our demo === */
+
+/* Force our tab navigation to always show (PF hides it on mobile) */
+.dashboard__navigation {
+  display: flex !important;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+/* Force our content to always be visible */
+.tab-panel.active {
+  display: block !important;
+}
+
+/* Hide PF's mobile nav (we don't need it) */
+.mobile-nav,
+.burger-menu-panel,
+.mobile-search-panel {
+  display: none !important;
+}
+
+/* Ensure container is full width on mobile */
+.dashboard__wrapper .container {
+  padding: 0 8px !important;
+}
+
+/* Override PF's overflow:hidden on dashboard wrapper (kills canvas on mobile) */
+.dashboard__wrapper {
+  overflow: visible !important;
+}
+
+/* Our feature card */
+.pf-feature-card {
+  border: 1px solid var(--border-color, #e0e0e0);
+  border-radius: 14px;
+  padding: 20px;
+  background: var(--card-bg, #fff);
+  margin-bottom: 16px;
+}
+
+.pf-feature-card h3 {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-h1-primary, #0f151b);
+  margin: 0 0 4px;
+}
+
+.pf-feature-card .subtitle {
+  font-size: 12px;
+  color: var(--text-p-primary, #4b5563);
+  margin: 0 0 16px;
+}
+
+/* Mobile: make header responsive */
+@media (max-width: 768px) {
+  .header_pf .center-header {
+    display: none !important;
   }
-}
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  .header_pf .right-side-header {
+    display: none !important;
+  }
+
+  .dashboard__navigation {
+    gap: 6px !important;
+    padding: 8px 0 !important;
+  }
+
+  /* Trader page: stack columns vertically */
+  .pnl-stats-wrapper {
+    flex-direction: column !important;
+  }
+
+  .pnl-stats-wrapper > div {
+    flex: 1 1 100% !important;
+  }
 }

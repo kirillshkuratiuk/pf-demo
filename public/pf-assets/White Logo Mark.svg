@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Layer_2" data-name="Layer 2" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 224.02 224.02">
+  <defs>
+    <style>
+      .cls-1 {
+        fill: #20efa4;
+        filter: url(#drop-shadow-1);
+      }
+
+      .cls-2 {
+        fill: #fff;
+      }
+
+      .cls-3 {
+        fill: none;
+      }
+
+      .cls-4 {
+        fill: #87b9d6;
+      }
+
+      .cls-5 {
+        fill: url(#linear-gradient);
+        opacity: .33;
+      }
+
+      .cls-6 {
+        clip-path: url(#clippath);
+      }
+    </style>
+    <linearGradient id="linear-gradient" x1="202.85" y1="61.21" x2="208.34" y2="55.72" gradientUnits="userSpaceOnUse">
+      <stop offset=".23" stop-color="#5bafaf"/>
+      <stop offset=".55" stop-color="#59acae"/>
+      <stop offset=".72" stop-color="#53a5ac"/>
+      <stop offset=".84" stop-color="#4997aa"/>
+      <stop offset=".95" stop-color="#3c84a6"/>
+      <stop offset="1" stop-color="#347aa4"/>
+    </linearGradient>
+    <clipPath id="clippath">
+      <polygon class="cls-3" points="145.77 0 165.45 0 224.02 59.28 224.02 86.01 128.82 86.01 128.82 0 145.77 0"/>
+    </clipPath>
+    <filter id="drop-shadow-1" x="146.49" y="-14.7" width="95" height="95" filterUnits="userSpaceOnUse">
+      <feOffset dx="-1.04" dy="2.6"/>
+      <feGaussianBlur result="blur" stdDeviation="5.72"/>
+      <feFlood flood-color="#082b2a" flood-opacity=".22"/>
+      <feComposite in2="blur" operator="in"/>
+      <feComposite in="SourceGraphic"/>
+    </filter>
+  </defs>
+  <g id="Layer_1-2" data-name="Layer 1">
+    <g>
+      <path class="cls-2" d="M224.01,59.27h-8.73v-2.84s0,1.15,0,1.15l-16.63-1.15v-.92l-.21.94v56.32c0,77.41-8.25,85.66-85.66,85.66h-1.53c-77.41,0-85.66-8.25-85.66-85.66v-1.53c0-77.41,8.25-85.66,85.66-85.66h56.34v-1.65s0-15.2,0-15.2h-2.13s0-8.73,0-8.73h0S110.59,0,110.59,0C49.34,0,21.63,4.01,9.36,30.11,1.6,46.6,0,71.9,0,110.59v2.85c0,99.94,10.65,110.59,110.59,110.59h2.85c35.46,0,59.67-1.35,76.16-7.54,29.98-11.26,34.42-38.57,34.42-103.04v-54.15h0Z"/>
+      <polygon class="cls-4" points="205.75 58.69 205.98 58.73 205.98 59.27 205.75 59.27 205.75 58.69"/>
+      <polygon class="cls-5" points="205.75 57.11 205.98 58.15 205.98 59.27 205.75 59.27 205.75 57.11"/>
+      <g class="cls-6">
+        <path class="cls-1" d="M205.58,40.62c0,.18.02.35.02.53-.02-.19-.04-.37-.06-.56l-21.86-22.13-1.49-1.5L165.45,0v16.49s0,1.79,0,1.79v13.51c0,13.03.94,19.99,5.56,23.64,3.98,3.15,10.7,3.85,21.93,3.85h31.08s-18.43-18.66-18.43-18.66Z"/>
+      </g>
+      <path class="cls-2" d="M88.77,149.74c9.19,3.38,18.99,6.81,28.73,5.26,4.34-.57,8.76-1.97,12.9-3.53,1.65-.57,3.14-1.22,4.89-1.75,1.01-.37,2.15.18,2.45,1.23.13.44.09.89-.09,1.28-4.33,9.64-14.96,16.04-25.71,15.74-10.74-.29-20.95-6.21-25.72-15.75-.72-1.63.94-3.17,2.54-2.48h0Z"/>
+      <ellipse class="cls-2" cx="69.93" cy="90.63" rx="15.58" ry="19.86"/>
+      <path class="cls-2" d="M154.77,113.21c-1.6,0-3.22-.54-4.55-1.64l-17.55-14.48c-1.65-1.36-2.6-3.39-2.6-5.52s.95-4.16,2.6-5.52l18.59-15.34c3.05-2.52,7.56-2.08,10.08.97,2.52,3.05,2.08,7.56-.97,10.08l-11.89,9.81,10.85,8.95c3.05,2.52,3.48,7.03.97,10.08-1.42,1.72-3.46,2.6-5.53,2.6Z"/>
+    </g>
+  </g>
+</svg>
