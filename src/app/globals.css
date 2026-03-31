@@ -72,6 +72,10 @@
     width: 100% !important;
   }
 
+  .betting-stats-grid > :last-child:nth-child(odd) {
+    grid-column: 1 / -1 !important;
+  }
+
   .betting-header-right {
     display: none !important;
   }

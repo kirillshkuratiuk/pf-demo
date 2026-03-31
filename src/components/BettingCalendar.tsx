@@ -82,9 +82,12 @@ export default function BettingCalendar({ dailyPnl, categories }: Props) {
       let lastMonth = -1;
       const cursor = new Date(startDate);
       let weekIndex = 0;
+      const seen = new Set<string>();
 
       while (cursor <= endDate) {
-        const dateStr = cursor.toISOString().split("T")[0];
+        const dateStr = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, "0")}-${String(cursor.getDate()).padStart(2, "0")}`;
+        if (seen.has(dateStr)) { cursor.setDate(cursor.getDate() + 1); continue; }
+        seen.add(dateStr);
         const month = cursor.getMonth();
         if (month !== lastMonth && cursor.getDay() === 1) {
           labels.push({ month: MONTHS[month], weekIndex });
@@ -137,17 +140,13 @@ export default function BettingCalendar({ dailyPnl, categories }: Props) {
   const activeDay = hoveredDay && hoveredDay.pnl !== 0 ? hoveredDay : null;
   const dayStats = activeDay ? getDayStats(activeDay.date, activeDay.pnl) : null;
 
-  const radarData = useMemo(() => {
+  const radarChartData = useMemo(() => {
     if (!categories) return null;
-    if (activeDay) {
-      return getDailyCategories(activeDay.date, activeDay.pnl, categories);
-    }
-    return categories.map((c) => ({ name: c.name, positions: c.positions, pnl: c.pnl }));
+    const source = activeDay
+      ? getDailyCategories(activeDay.date, activeDay.pnl, categories)
+      : categories;
+    return source.map((c) => ({ category: c.name, positions: c.positions, pnl: c.pnl }));
   }, [categories, activeDay]);
-
-  const radarChartData = radarData?.map((c) => ({
-    category: c.name, positions: c.positions, pnl: c.pnl,
-  }));
 
   const statsLabel = activeDay
     ? new Date(activeDay.date).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" })
@@ -260,7 +259,7 @@ export default function BettingCalendar({ dailyPnl, categories }: Props) {
             </div>
             <div style={{ height: 280 }}>
               <ResponsiveContainer width="100%" height="100%">
-                <RadarChart key="category-radar" data={radarChartData} cx="50%" cy="50%" outerRadius="75%">
+                <RadarChart data={radarChartData} cx="50%" cy="50%" outerRadius="75%">
                   <PolarGrid stroke="var(--border-color, #e0e0e0)" />
                   <PolarAngleAxis
                     dataKey="category"
@@ -273,7 +272,8 @@ export default function BettingCalendar({ dailyPnl, categories }: Props) {
                     fill="var(--accent-color, #284b63)"
                     fillOpacity={0.12}
                     strokeWidth={1.5}
-                    isAnimationActive={false}
+                    isAnimationActive={true}
+                    animationDuration={200}
                   />
                   <Tooltip
                     contentStyle={{
@@ -283,7 +283,7 @@ export default function BettingCalendar({ dailyPnl, categories }: Props) {
                     }}
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     formatter={(value: any, _name: any, props: any) => {
-                      const total = radarChartData.reduce((s, c) => s + c.positions, 0);
+                      const total = radarChartData?.reduce((s, c) => s + c.positions, 0) ?? 0;
                       const pct = total > 0 ? Math.round((value / total) * 100) : 0;
                       const pnl = props?.payload?.pnl ?? 0;
                       return [`${value} positions (${pct}%) · ${formatPnl(pnl)}`, props?.payload?.category];
