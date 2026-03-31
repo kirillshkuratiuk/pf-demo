@@ -50,19 +50,19 @@ function getIslandPositions(width: number, height: number, categories: Category[
     });
   }
 
-  // Desktop: organic scatter
+  // Desktop: organic scatter — pulled in from edges
   const positions: Record<string, { fx: number; fy: number }> = {
-    Crypto: { fx: 0.16, fy: 0.25 },
-    Politics: { fx: 0.50, fy: 0.18 },
-    Sports: { fx: 0.84, fy: 0.25 },
-    Finance: { fx: 0.16, fy: 0.72 },
-    "AI & Tech": { fx: 0.50, fy: 0.72 },
-    Culture: { fx: 0.84, fy: 0.72 },
-    Science: { fx: 0.33, fy: 0.47 },
-    "World Events": { fx: 0.67, fy: 0.47 },
+    Crypto: { fx: 0.15, fy: 0.25 },
+    Politics: { fx: 0.48, fy: 0.18 },
+    Sports: { fx: 0.78, fy: 0.25 },
+    Finance: { fx: 0.15, fy: 0.72 },
+    "AI & Tech": { fx: 0.48, fy: 0.72 },
+    Culture: { fx: 0.78, fy: 0.72 },
+    Science: { fx: 0.32, fy: 0.47 },
+    "World Events": { fx: 0.63, fy: 0.47 },
   };
 
-  const pad = 100;
+  const pad = 120;
   return categories.map((cat) => {
     const pos = positions[cat] || { fx: 0.5, fy: 0.5 };
     return {
