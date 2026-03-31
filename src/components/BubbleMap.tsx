@@ -22,18 +22,48 @@ interface BubbleNode {
   vy: number;
 }
 
-const ISLAND_POSITIONS: Record<string, { fx: number; fy: number }> = {
-  Crypto: { fx: 0.18, fy: 0.22 },
-  Politics: { fx: 0.72, fy: 0.15 },
-  Sports: { fx: 0.1, fy: 0.7 },
-  Finance: { fx: 0.52, fy: 0.68 },
-  "AI & Tech": { fx: 0.85, fy: 0.52 },
-  Culture: { fx: 0.43, fy: 0.38 },
-  Science: { fx: 0.62, fy: 0.35 },
-  "World Events": { fx: 0.32, fy: 0.78 },
-};
+// Responsive island grid — adapts to aspect ratio
+function getIslandPositions(width: number, height: number, categories: Category[]) {
+  const count = categories.length;
+  const isPortrait = height > width * 0.8;
 
-// Preload images and cache them
+  if (isPortrait) {
+    // Mobile: vertical stack, 2 columns
+    const cols = 2;
+    const rows = Math.ceil(count / cols);
+    const cellW = width / cols;
+    const cellH = height / rows;
+    return categories.map((cat, i) => ({
+      category: cat,
+      x: cellW * (i % cols) + cellW / 2,
+      y: cellH * Math.floor(i / cols) + cellH / 2,
+    }));
+  }
+
+  // Desktop: organic scatter
+  const positions: Record<string, { fx: number; fy: number }> = {
+    Crypto: { fx: 0.16, fy: 0.25 },
+    Politics: { fx: 0.50, fy: 0.18 },
+    Sports: { fx: 0.84, fy: 0.25 },
+    Finance: { fx: 0.16, fy: 0.72 },
+    "AI & Tech": { fx: 0.50, fy: 0.72 },
+    Culture: { fx: 0.84, fy: 0.72 },
+    Science: { fx: 0.33, fy: 0.47 },
+    "World Events": { fx: 0.67, fy: 0.47 },
+  };
+
+  const pad = 100;
+  return categories.map((cat) => {
+    const pos = positions[cat] || { fx: 0.5, fy: 0.5 };
+    return {
+      category: cat,
+      x: pad + pos.fx * (width - pad * 2),
+      y: pad + pos.fy * (height - pad * 2),
+    };
+  });
+}
+
+// Preload images
 const imageCache = new Map<string, HTMLImageElement>();
 function loadImage(src: string): Promise<HTMLImageElement> {
   if (imageCache.has(src)) return Promise.resolve(imageCache.get(src)!);
@@ -41,9 +71,30 @@ function loadImage(src: string): Promise<HTMLImageElement> {
     const img = new Image();
     img.crossOrigin = "anonymous";
     img.onload = () => { imageCache.set(src, img); resolve(img); };
-    img.onerror = () => resolve(img); // fallback: broken image handled in draw
+    img.onerror = () => resolve(img);
     img.src = src;
   });
+}
+
+function hexToRgba(hex: string, alpha: number): string {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
+function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
 }
 
 export default function BubbleMap() {
@@ -56,9 +107,7 @@ export default function BubbleMap() {
   const [activeCategory, setActiveCategory] = useState<Category | null>(null);
   const nodesRef = useRef<BubbleNode[]>([]);
   const transformRef = useRef<d3.ZoomTransform>(d3.zoomIdentity);
-  const imagesLoadedRef = useRef(false);
 
-  // Responsive sizing — mounted flag ensures we only read DOM on client
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
 
@@ -66,32 +115,23 @@ export default function BubbleMap() {
     if (!mounted) return;
     function measure() {
       const w = containerRef.current?.offsetWidth
-        || containerRef.current?.getBoundingClientRect().width
-        || document.body.clientWidth
-        || window.innerWidth;
+        || document.body.clientWidth || window.innerWidth;
       const isMobile = w < 768;
       setDimensions({
         width: Math.round(w),
-        height: Math.round(isMobile ? Math.max(480, w * 0.85) : Math.max(560, w * 0.48)),
+        height: Math.round(isMobile ? Math.max(600, w * 1.1) : Math.max(600, w * 0.52)),
       });
     }
     measure();
-    // Re-measure aggressively to catch late CSS layouts
     const timers = [50, 150, 300, 600, 1000].map((ms) => setTimeout(measure, ms));
     window.addEventListener("resize", measure);
-    return () => {
-      window.removeEventListener("resize", measure);
-      timers.forEach(clearTimeout);
-    };
+    return () => { window.removeEventListener("resize", measure); timers.forEach(clearTimeout); };
   }, [mounted]);
 
-  // Find node under cursor
   const findNodeAt = useCallback((canvasX: number, canvasY: number): BubbleNode | null => {
     const t = transformRef.current;
-    // Convert canvas coords to world coords
     const worldX = (canvasX - t.x) / t.k;
     const worldY = (canvasY - t.y) / t.k;
-
     for (let i = nodesRef.current.length - 1; i >= 0; i--) {
       const node = nodesRef.current[i];
       const dx = worldX - node.x;
@@ -101,7 +141,6 @@ export default function BubbleMap() {
     return null;
   }, []);
 
-  // Main effect: simulation + canvas rendering
   useEffect(() => {
     if (!canvasRef.current || dimensions.width === 0) return;
 
@@ -110,84 +149,101 @@ export default function BubbleMap() {
     const ctx = canvas.getContext("2d")!;
     const dpr = window.devicePixelRatio || 1;
 
-    // HiDPI canvas
     canvas.width = width * dpr;
     canvas.height = height * dpr;
     canvas.style.width = `${width}px`;
     canvas.style.height = `${height}px`;
 
-    const pad = 80;
     const usedCategories = [...new Set(MOCK_TRADERS.map((t) => t.favoriteCategory))] as Category[];
-
-    const clusters = usedCategories.map((cat) => {
-      const pos = ISLAND_POSITIONS[cat] || { fx: 0.5, fy: 0.5 };
-      return { category: cat, x: pad + pos.fx * (width - pad * 2), y: pad + pos.fy * (height - pad * 2) };
-    });
+    const clusters = getIslandPositions(width, height, usedCategories);
 
     const maxPnl = Math.max(...MOCK_TRADERS.map((t) => Math.abs(t.pnl)));
-    const radiusScale = d3.scaleSqrt().domain([0, maxPnl]).range([22, Math.min(width, height) * 0.09]);
+    const isMobile = width < 768;
+    const minR = isMobile ? 18 : 22;
+    const maxR = Math.min(width, height) * (isMobile ? 0.06 : 0.08);
+    const radiusScale = d3.scaleSqrt().domain([0, maxPnl]).range([minR, maxR]);
 
     const nodes: BubbleNode[] = MOCK_TRADERS.map((trader) => {
       const cluster = clusters.find((c) => c.category === trader.favoriteCategory)!;
       return {
         trader, radius: radiusScale(Math.abs(trader.pnl)),
         category: trader.favoriteCategory as Category,
-        x: cluster.x + (Math.random() - 0.5) * 30,
-        y: cluster.y + (Math.random() - 0.5) * 30,
+        x: cluster.x + (Math.random() - 0.5) * 20,
+        y: cluster.y + (Math.random() - 0.5) * 20,
         vx: 0, vy: 0,
       };
     });
     nodesRef.current = nodes;
 
-    // Preload all avatar images
-    const avatarPromises = nodes
-      .filter((n) => n.trader.avatar)
-      .map((n) => loadImage(n.trader.avatar!));
-    Promise.all(avatarPromises).then(() => {
-      imagesLoadedRef.current = true;
-      draw();
-    });
+    // Preload avatars
+    const avatarPromises = nodes.filter((n) => n.trader.avatar).map((n) => loadImage(n.trader.avatar!));
+    Promise.all(avatarPromises).then(() => draw());
 
-    // --- Draw function ---
     let hoveredNode: BubbleNode | null = null;
 
     function draw() {
       const t = transformRef.current;
-
-      // Reset transform and clear the FULL canvas buffer
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // Background — fill full buffer
-      ctx.fillStyle = "#fafafa";
+      // Background
+      ctx.fillStyle = "#fafbfc";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      // Now apply DPR scaling + zoom transform
+      // Apply DPR + zoom
       ctx.setTransform(dpr * t.k, 0, 0, dpr * t.k, dpr * t.x, dpr * t.y);
 
-      // Draw island backgrounds
+      // --- Draw category zones as rounded rect cards ---
       for (const cluster of clusters) {
         const clusterNodes = nodes.filter((n) => n.category === cluster.category);
-        const totalRadius = clusterNodes.reduce((s, n) => s + n.radius, 0) * 0.7 + 60;
+        if (clusterNodes.length === 0) continue;
+
+        // Calculate bounding box of cluster's bubbles
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        for (const n of clusterNodes) {
+          minX = Math.min(minX, n.x - n.radius);
+          minY = Math.min(minY, n.y - n.radius);
+          maxX = Math.max(maxX, n.x + n.radius);
+          maxY = Math.max(maxY, n.y + n.radius);
+        }
+
+        // Expand for padding + label
+        const zonePad = 30;
+        const labelH = 28;
+        const zx = minX - zonePad;
+        const zy = minY - zonePad - labelH;
+        const zw = maxX - minX + zonePad * 2;
+        const zh = maxY - minY + zonePad * 2 + labelH + 20; // extra for name labels below bubbles
+
         const color = CATEGORY_COLORS[cluster.category];
 
-        // Radial gradient
-        const grad = ctx.createRadialGradient(cluster.x, cluster.y, 0, cluster.x, cluster.y, totalRadius);
-        grad.addColorStop(0, hexToRgba(color, 0.07));
-        grad.addColorStop(1, hexToRgba(color, 0.015));
-        ctx.beginPath();
-        ctx.arc(cluster.x, cluster.y, totalRadius, 0, Math.PI * 2);
-        ctx.fillStyle = grad;
+        // Card background
+        roundRect(ctx, zx, zy, zw, zh, 16);
+        ctx.fillStyle = hexToRgba(color, 0.04);
         ctx.fill();
 
-        // Label
+        // Card border
+        roundRect(ctx, zx, zy, zw, zh, 16);
+        ctx.strokeStyle = hexToRgba(color, 0.12);
+        ctx.lineWidth = 1;
+        ctx.stroke();
+
+        // Category label — top left of card
+        ctx.fillStyle = hexToRgba(color, 0.8);
+        ctx.font = `600 12px -apple-system, system-ui, sans-serif`;
+        ctx.textAlign = "left";
+        ctx.textBaseline = "top";
+        ctx.fillText(cluster.category, zx + 14, zy + 10);
+
+        // Trader count — right side of label
+        const countText = `${clusterNodes.length}`;
         ctx.fillStyle = "#999";
-        ctx.font = "500 11px -apple-system, system-ui, sans-serif";
-        ctx.textAlign = "center";
-        ctx.fillText(cluster.category, cluster.x, cluster.y - totalRadius + 14);
+        ctx.font = `400 11px -apple-system, system-ui, sans-serif`;
+        ctx.textAlign = "right";
+        ctx.fillText(countText, zx + zw - 14, zy + 11);
       }
 
-      // Draw bubbles
+      // --- Draw bubbles ---
       for (const node of nodes) {
         const isHovered = hoveredNode === node;
 
@@ -196,28 +252,25 @@ export default function BubbleMap() {
         if (isHovered) ctx.scale(1.05, 1.05);
 
         // Shadow
-        ctx.shadowColor = "rgba(0,0,0,0.08)";
-        ctx.shadowBlur = isHovered ? 12 : 6;
-        ctx.shadowOffsetY = 2;
+        ctx.shadowColor = isHovered ? "rgba(0,0,0,0.14)" : "rgba(0,0,0,0.06)";
+        ctx.shadowBlur = isHovered ? 14 : 6;
+        ctx.shadowOffsetY = isHovered ? 3 : 1;
 
-        // Circle clip for avatar
         ctx.beginPath();
         ctx.arc(0, 0, node.radius, 0, Math.PI * 2);
 
         const color = CATEGORY_COLORS[node.category];
         if (node.trader.avatar && imageCache.has(node.trader.avatar)) {
-          // Draw avatar image clipped to circle
           ctx.save();
           ctx.clip();
           const img = imageCache.get(node.trader.avatar)!;
           ctx.drawImage(img, -node.radius, -node.radius, node.radius * 2, node.radius * 2);
           ctx.restore();
         } else {
-          // Fallback: colored circle with initial
-          ctx.fillStyle = hexToRgba(color, 0.12);
+          ctx.fillStyle = hexToRgba(color, 0.1);
           ctx.fill();
           ctx.fillStyle = color;
-          ctx.font = `600 ${Math.max(18, node.radius * 0.5)}px -apple-system, system-ui, sans-serif`;
+          ctx.font = `600 ${Math.max(16, node.radius * 0.5)}px -apple-system, system-ui, sans-serif`;
           ctx.textAlign = "center";
           ctx.textBaseline = "middle";
           ctx.fillText(node.trader.name.charAt(0).toUpperCase(), 0, 0);
@@ -228,57 +281,52 @@ export default function BubbleMap() {
         ctx.shadowBlur = 0;
         ctx.beginPath();
         ctx.arc(0, 0, node.radius, 0, Math.PI * 2);
-        ctx.strokeStyle = hexToRgba(color, isHovered ? 0.85 : 0.4);
+        ctx.strokeStyle = hexToRgba(color, isHovered ? 0.8 : 0.35);
         ctx.lineWidth = isHovered ? 2.5 : 1.5;
         ctx.stroke();
 
-        // Name label below
+        // Name
         ctx.fillStyle = "#0f151b";
-        const fontSize = Math.max(11, Math.min(14, node.radius * 0.34));
+        const fontSize = Math.max(10, Math.min(13, node.radius * 0.32));
         ctx.font = `500 ${fontSize}px -apple-system, system-ui, sans-serif`;
         ctx.textAlign = "center";
         ctx.textBaseline = "top";
-        const name = node.trader.name.length > 12 ? node.trader.name.slice(0, 11) + "..." : node.trader.name;
-        ctx.fillText(name, 0, node.radius + 6);
+        const name = node.trader.name.length > 11 ? node.trader.name.slice(0, 10) + "..." : node.trader.name;
+        ctx.fillText(name, 0, node.radius + 5);
 
-        // PnL label
-        if (node.radius > 26) {
+        // PnL
+        if (node.radius > 22) {
           ctx.fillStyle = node.trader.pnl >= 0 ? "#30A159" : "#ef4444";
-          ctx.font = `400 ${Math.max(10, Math.min(12, node.radius * 0.28))}px -apple-system, system-ui, sans-serif`;
-          ctx.fillText(formatPnl(node.trader.pnl), 0, node.radius + 6 + fontSize + 2);
+          ctx.font = `400 ${Math.max(9, Math.min(11, node.radius * 0.26))}px -apple-system, system-ui, sans-serif`;
+          ctx.fillText(formatPnl(node.trader.pnl), 0, node.radius + 5 + fontSize + 2);
         }
 
         ctx.restore();
       }
     }
 
-    // --- D3 Force Simulation ---
+    // --- Simulation ---
     const simulation = d3.forceSimulation(nodes as d3.SimulationNodeDatum[])
       .force("x", d3.forceX<d3.SimulationNodeDatum>((d) => {
         const n = d as unknown as BubbleNode;
         return clusters.find((c) => c.category === n.category)!.x;
-      }).strength(0.3))
+      }).strength(0.4))
       .force("y", d3.forceY<d3.SimulationNodeDatum>((d) => {
         const n = d as unknown as BubbleNode;
         return clusters.find((c) => c.category === n.category)!.y;
-      }).strength(0.3))
+      }).strength(0.4))
       .force("collision", d3.forceCollide<d3.SimulationNodeDatum>()
-        .radius((d) => (d as unknown as BubbleNode).radius + 6).strength(1))
-      .force("charge", d3.forceManyBody().strength(-2))
+        .radius((d) => (d as unknown as BubbleNode).radius + 5).strength(1))
+      .force("charge", d3.forceManyBody().strength(-1))
       .on("tick", () => {
-        for (const d of nodes) {
-          d.x = Math.max(pad, Math.min(width - pad, d.x));
-          d.y = Math.max(pad, Math.min(height - pad, d.y));
-        }
         draw();
       });
 
-    // --- Zoom + Pan (D3 on a fake SVG overlay for events, or directly on canvas) ---
+    // --- Zoom ---
     const canvasSelection = d3.select(canvas);
     const zoom = d3.zoom<HTMLCanvasElement, unknown>()
       .scaleExtent([0.3, 5])
       .filter((event) => {
-        // Allow pinch (ctrlKey wheel), touch, mouse drag
         if (event.type === "wheel") return (event as WheelEvent).ctrlKey || (event as WheelEvent).metaKey;
         return true;
       })
@@ -289,59 +337,32 @@ export default function BubbleMap() {
       });
     canvasSelection.call(zoom);
 
-    // --- Mouse interaction ---
+    // --- Mouse ---
     canvas.addEventListener("mousemove", (e) => {
       const rect = canvas.getBoundingClientRect();
-      const cx = e.clientX - rect.left;
-      const cy = e.clientY - rect.top;
-      const node = findNodeAt(cx, cy);
-
+      const node = findNodeAt(e.clientX - rect.left, e.clientY - rect.top);
       if (node !== hoveredNode) {
         hoveredNode = node;
         canvas.style.cursor = node ? "pointer" : "grab";
         draw();
       }
-
       if (node) {
-        const container = containerRef.current;
-        if (container) {
-          const containerRect = container.getBoundingClientRect();
-          setTooltip({
-            trader: node.trader,
-            x: e.clientX - containerRect.left,
-            y: e.clientY - containerRect.top,
-          });
-        }
-      } else {
-        setTooltip(null);
-      }
+        const cr = containerRef.current?.getBoundingClientRect();
+        if (cr) setTooltip({ trader: node.trader, x: e.clientX - cr.left, y: e.clientY - cr.top });
+      } else { setTooltip(null); }
     });
+    canvas.addEventListener("mouseleave", () => { hoveredNode = null; setTooltip(null); draw(); });
 
-    canvas.addEventListener("mouseleave", () => {
-      hoveredNode = null;
-      setTooltip(null);
-      draw();
-    });
-
-    // Touch tap for mobile tooltip
+    // Touch tap
     canvas.addEventListener("touchend", (e) => {
       if (e.changedTouches.length === 1) {
         const touch = e.changedTouches[0];
         const rect = canvas.getBoundingClientRect();
         const node = findNodeAt(touch.clientX - rect.left, touch.clientY - rect.top);
         if (node) {
-          const container = containerRef.current;
-          if (container) {
-            const containerRect = container.getBoundingClientRect();
-            setTooltip({
-              trader: node.trader,
-              x: touch.clientX - containerRect.left,
-              y: touch.clientY - containerRect.top,
-            });
-          }
-        } else {
-          setTooltip(null);
-        }
+          const cr = containerRef.current?.getBoundingClientRect();
+          if (cr) setTooltip({ trader: node.trader, x: touch.clientX - cr.left, y: touch.clientY - cr.top });
+        } else { setTooltip(null); }
       }
     });
 
@@ -386,21 +407,14 @@ export default function BubbleMap() {
 
       <div style={{ height: "1px", background: "#f2f2f2" }} />
 
-      {/* Canvas — container has explicit height so ResizeObserver always reports width */}
+      {/* Canvas */}
       <div ref={containerRef} style={{
         position: "relative", overflow: "hidden",
         touchAction: "none",
         width: dimensions.width > 0 ? `${dimensions.width}px` : "100vw",
         height: dimensions.height > 0 ? `${dimensions.height}px` : "70vh",
       }}>
-        <canvas
-          ref={canvasRef}
-          style={{ display: "block", cursor: "grab", border: "3px solid red", minHeight: "400px", width: "100%" }}
-        />
-        {/* Debug info */}
-        <div style={{ position: "absolute", top: 4, left: 4, background: "red", color: "white", padding: "4px 8px", fontSize: "11px", borderRadius: "4px", zIndex: 99 }}>
-          dim:{dimensions.width}x{dimensions.height} | mounted:{mounted?"Y":"N"} | ref:{containerRef.current?.offsetWidth ?? "null"}
-        </div>
+        <canvas ref={canvasRef} style={{ display: "block", cursor: "grab" }} />
       </div>
 
       {/* Tooltip */}
@@ -454,12 +468,4 @@ export default function BubbleMap() {
       )}
     </div>
   );
-}
-
-// Helper: hex color to rgba string
-function hexToRgba(hex: string, alpha: number): string {
-  const r = parseInt(hex.slice(1, 3), 16);
-  const g = parseInt(hex.slice(3, 5), 16);
-  const b = parseInt(hex.slice(5, 7), 16);
-  return `rgba(${r},${g},${b},${alpha})`;
 }
