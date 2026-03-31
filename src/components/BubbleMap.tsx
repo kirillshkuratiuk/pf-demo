@@ -63,6 +63,8 @@ function getIslandPositions(width: number, height: number, categories: Category[
   });
 }
 
+const DEFAULT_AVATAR = "/pf-assets/default-avatar.svg";
+
 // Preload images
 const imageCache = new Map<string, HTMLImageElement>();
 function loadImage(src: string): Promise<HTMLImageElement> {
@@ -154,7 +156,10 @@ export default function BubbleMap() {
     canvas.style.width = `${width}px`;
     canvas.style.height = `${height}px`;
 
-    const usedCategories = [...new Set(MOCK_TRADERS.map((t) => t.favoriteCategory))] as Category[];
+    const filteredTraders = activeCategory
+      ? MOCK_TRADERS.filter((t) => t.favoriteCategory === activeCategory)
+      : MOCK_TRADERS;
+    const usedCategories = [...new Set(filteredTraders.map((t) => t.favoriteCategory))] as Category[];
     const clusters = getIslandPositions(width, height, usedCategories);
 
     const maxPnl = Math.max(...MOCK_TRADERS.map((t) => Math.abs(t.pnl)));
@@ -163,7 +168,7 @@ export default function BubbleMap() {
     const maxR = Math.min(width, height) * (isMobile ? 0.06 : 0.08);
     const radiusScale = d3.scaleSqrt().domain([0, maxPnl]).range([minR, maxR]);
 
-    const nodes: BubbleNode[] = MOCK_TRADERS.map((trader) => {
+    const nodes: BubbleNode[] = filteredTraders.map((trader) => {
       const cluster = clusters.find((c) => c.category === trader.favoriteCategory)!;
       return {
         trader, radius: radiusScale(Math.abs(trader.pnl)),
@@ -175,8 +180,8 @@ export default function BubbleMap() {
     });
     nodesRef.current = nodes;
 
-    // Preload avatars
-    const avatarPromises = nodes.filter((n) => n.trader.avatar).map((n) => loadImage(n.trader.avatar!));
+    // Preload all avatars (use default for traders without one)
+    const avatarPromises = nodes.map((n) => loadImage(n.trader.avatar || DEFAULT_AVATAR));
     Promise.all(avatarPromises).then(() => draw());
 
     let hoveredNode: BubbleNode | null = null;
@@ -193,54 +198,26 @@ export default function BubbleMap() {
       // Apply DPR + zoom
       ctx.setTransform(dpr * t.k, 0, 0, dpr * t.k, dpr * t.x, dpr * t.y);
 
-      // --- Draw category zones as rounded rect cards ---
+      // --- Draw category labels above each cluster ---
       for (const cluster of clusters) {
         const clusterNodes = nodes.filter((n) => n.category === cluster.category);
         if (clusterNodes.length === 0) continue;
 
-        // Calculate bounding box of cluster's bubbles
-        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        // Find top of cluster
+        let minY = Infinity;
+        let avgX = 0;
         for (const n of clusterNodes) {
-          minX = Math.min(minX, n.x - n.radius);
-          minY = Math.min(minY, n.y - n.radius);
-          maxX = Math.max(maxX, n.x + n.radius);
-          maxY = Math.max(maxY, n.y + n.radius);
+          if (n.y - n.radius < minY) minY = n.y - n.radius;
+          avgX += n.x;
         }
+        avgX /= clusterNodes.length;
 
-        // Expand for padding + label
-        const zonePad = 30;
-        const labelH = 28;
-        const zx = minX - zonePad;
-        const zy = minY - zonePad - labelH;
-        const zw = maxX - minX + zonePad * 2;
-        const zh = maxY - minY + zonePad * 2 + labelH + 20; // extra for name labels below bubbles
-
-        const color = CATEGORY_COLORS[cluster.category];
-
-        // Card background
-        roundRect(ctx, zx, zy, zw, zh, 16);
-        ctx.fillStyle = hexToRgba(color, 0.04);
-        ctx.fill();
-
-        // Card border
-        roundRect(ctx, zx, zy, zw, zh, 16);
-        ctx.strokeStyle = hexToRgba(color, 0.12);
-        ctx.lineWidth = 1;
-        ctx.stroke();
-
-        // Category label — top left of card
-        ctx.fillStyle = hexToRgba(color, 0.8);
-        ctx.font = `600 12px -apple-system, system-ui, sans-serif`;
-        ctx.textAlign = "left";
-        ctx.textBaseline = "top";
-        ctx.fillText(cluster.category, zx + 14, zy + 10);
-
-        // Trader count — right side of label
-        const countText = `${clusterNodes.length}`;
-        ctx.fillStyle = "#999";
-        ctx.font = `400 11px -apple-system, system-ui, sans-serif`;
-        ctx.textAlign = "right";
-        ctx.fillText(countText, zx + zw - 14, zy + 11);
+        // Category label
+        ctx.fillStyle = "#888";
+        ctx.font = `500 12px -apple-system, system-ui, sans-serif`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "bottom";
+        ctx.fillText(`${cluster.category} · ${clusterNodes.length}`, avgX, minY - 10);
       }
 
       // --- Draw bubbles ---
@@ -260,45 +237,76 @@ export default function BubbleMap() {
         ctx.arc(0, 0, node.radius, 0, Math.PI * 2);
 
         const color = CATEGORY_COLORS[node.category];
-        if (node.trader.avatar && imageCache.has(node.trader.avatar)) {
+        const r = node.radius;
+        const avatarSrc = node.trader.avatar || DEFAULT_AVATAR;
+        const hasRealAvatar = !!node.trader.avatar;
+        const img = imageCache.get(avatarSrc);
+
+        if (img && img.complete && img.naturalWidth > 0) {
           ctx.save();
           ctx.clip();
-          const img = imageCache.get(node.trader.avatar)!;
-          ctx.drawImage(img, -node.radius, -node.radius, node.radius * 2, node.radius * 2);
+          ctx.drawImage(img, -r, -r, r * 2, r * 2);
+          // Dark overlay only on real avatars for text legibility
+          if (hasRealAvatar) {
+            const overlay = ctx.createLinearGradient(0, -r * 0.3, 0, r);
+            overlay.addColorStop(0, "rgba(0,0,0,0)");
+            overlay.addColorStop(0.6, "rgba(0,0,0,0.15)");
+            overlay.addColorStop(1, "rgba(0,0,0,0.5)");
+            ctx.fillStyle = overlay;
+            ctx.fillRect(-r, -r, r * 2, r * 2);
+          }
           ctx.restore();
         } else {
           ctx.fillStyle = hexToRgba(color, 0.1);
           ctx.fill();
-          ctx.fillStyle = color;
-          ctx.font = `600 ${Math.max(16, node.radius * 0.5)}px -apple-system, system-ui, sans-serif`;
-          ctx.textAlign = "center";
-          ctx.textBaseline = "middle";
-          ctx.fillText(node.trader.name.charAt(0).toUpperCase(), 0, 0);
         }
 
         // Ring
         ctx.shadowColor = "transparent";
         ctx.shadowBlur = 0;
         ctx.beginPath();
-        ctx.arc(0, 0, node.radius, 0, Math.PI * 2);
+        ctx.arc(0, 0, r, 0, Math.PI * 2);
         ctx.strokeStyle = hexToRgba(color, isHovered ? 0.8 : 0.35);
         ctx.lineWidth = isHovered ? 2.5 : 1.5;
         ctx.stroke();
 
-        // Name
-        ctx.fillStyle = "#0f151b";
-        const fontSize = Math.max(10, Math.min(13, node.radius * 0.32));
-        ctx.font = `500 ${fontSize}px -apple-system, system-ui, sans-serif`;
+        // Text inside bubble
         ctx.textAlign = "center";
-        ctx.textBaseline = "top";
-        const name = node.trader.name.length > 11 ? node.trader.name.slice(0, 10) + "..." : node.trader.name;
-        ctx.fillText(name, 0, node.radius + 5);
 
-        // PnL
-        if (node.radius > 22) {
-          ctx.fillStyle = node.trader.pnl >= 0 ? "#30A159" : "#ef4444";
-          ctx.font = `400 ${Math.max(9, Math.min(11, node.radius * 0.26))}px -apple-system, system-ui, sans-serif`;
-          ctx.fillText(formatPnl(node.trader.pnl), 0, node.radius + 5 + fontSize + 2);
+        // Text inside bubble — always show name + PnL
+        const textOnPhoto = hasRealAvatar;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+
+        if (r >= 30) {
+          // Name + PnL
+          const nameSize = Math.max(9, Math.min(14, r * 0.28));
+          const pnlSize = Math.max(8, Math.min(12, r * 0.24));
+          const gap = nameSize * 0.15;
+
+          const maxChars = Math.max(4, Math.floor(r * 0.14) + 3);
+          const name = node.trader.name.length > maxChars
+            ? node.trader.name.slice(0, maxChars - 1) + "..."
+            : node.trader.name;
+
+          ctx.fillStyle = textOnPhoto ? "#fff" : "#555";
+          ctx.font = `600 ${nameSize}px -apple-system, system-ui, sans-serif`;
+          ctx.fillText(name, 0, textOnPhoto ? r * 0.15 : -pnlSize * 0.5 - gap);
+
+          ctx.fillStyle = textOnPhoto
+            ? (node.trader.pnl >= 0 ? "#6ee7a0" : "#fca5a5")
+            : (node.trader.pnl >= 0 ? "#30A159" : "#ef4444");
+          ctx.font = `500 ${pnlSize}px -apple-system, system-ui, sans-serif`;
+          ctx.fillText(formatPnl(node.trader.pnl), 0, textOnPhoto ? r * 0.15 + nameSize + gap : pnlSize * 0.5 + gap);
+
+        } else {
+          // Small: just PnL
+          const pnlSize = Math.max(7, r * 0.32);
+          ctx.fillStyle = textOnPhoto
+            ? "#fff"
+            : (node.trader.pnl >= 0 ? "#30A159" : "#ef4444");
+          ctx.font = `600 ${pnlSize}px -apple-system, system-ui, sans-serif`;
+          ctx.fillText(formatPnl(node.trader.pnl), 0, textOnPhoto ? r * 0.2 : 0);
         }
 
         ctx.restore();
@@ -310,13 +318,13 @@ export default function BubbleMap() {
       .force("x", d3.forceX<d3.SimulationNodeDatum>((d) => {
         const n = d as unknown as BubbleNode;
         return clusters.find((c) => c.category === n.category)!.x;
-      }).strength(0.4))
+      }).strength(0.6))
       .force("y", d3.forceY<d3.SimulationNodeDatum>((d) => {
         const n = d as unknown as BubbleNode;
         return clusters.find((c) => c.category === n.category)!.y;
-      }).strength(0.4))
+      }).strength(0.6))
       .force("collision", d3.forceCollide<d3.SimulationNodeDatum>()
-        .radius((d) => (d as unknown as BubbleNode).radius + 5).strength(1))
+        .radius((d) => (d as unknown as BubbleNode).radius + 3).strength(1))
       .force("charge", d3.forceManyBody().strength(-1))
       .on("tick", () => {
         draw();
@@ -367,7 +375,7 @@ export default function BubbleMap() {
     });
 
     return () => { simulation.stop(); };
-  }, [dimensions, findNodeAt]);
+  }, [dimensions, findNodeAt, activeCategory]);
 
   return (
     <div style={{ position: "relative" }}>
@@ -378,7 +386,10 @@ export default function BubbleMap() {
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
           <span style={{ fontSize: "14px", fontWeight: 500, color: "#0f151b", marginRight: "4px" }}>
-            {MOCK_TRADERS.length} traders
+            {activeCategory
+              ? `${MOCK_TRADERS.filter((t) => t.favoriteCategory === activeCategory).length} traders`
+              : `${MOCK_TRADERS.length} traders`
+            }
           </span>
           {CATEGORIES.map((cat) => {
             const count = MOCK_TRADERS.filter((t) => t.favoriteCategory === cat).length;
@@ -387,14 +398,12 @@ export default function BubbleMap() {
             return (
               <button key={cat} onClick={() => setActiveCategory(isActive ? null : cat)}
                 style={{
-                  display: "flex", alignItems: "center", gap: "5px",
                   padding: "6px 12px", borderRadius: "9px", border: "none",
                   fontSize: "14px", fontWeight: 400, cursor: "pointer",
                   background: isActive ? "#0052ff" : "#f3f3f3",
                   color: isActive ? "#fff" : "#000",
                   transition: "all 0.15s",
                 }}>
-                <span style={{ width: "7px", height: "7px", borderRadius: "50%", backgroundColor: CATEGORY_COLORS[cat], flexShrink: 0 }} />
                 {cat}
               </button>
             );
