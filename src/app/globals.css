@@ -25,15 +25,20 @@
   display: none !important;
 }
 
-/* Container padding — match PF's desktop spacing */
-.dashboard__wrapper .container {
-  padding: 0 20px !important;
+/* Remove gray gap between header and content */
+body {
+  background-color: #fff !important;
 }
 
-@media (min-width: 769px) {
-  .dashboard__wrapper .container {
-    padding: 0 28px !important;
-  }
+.dashboard__wrapper {
+  margin-top: 0 !important;
+  padding-top: 0 !important;
+  gap: 0 !important;
+}
+
+/* Container padding — match PF's actual spacing */
+.dashboard__wrapper .container {
+  padding: 0 11px !important;
 }
 
 

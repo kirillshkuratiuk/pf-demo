@@ -55,7 +55,7 @@ export default function TradersPage() {
                     <a href="https://polymarket.com/profile/0x7c3db723f1d4d8cb9c550095203b686cb11e5c6b" target="_blank" rel="noopener noreferrer" style={{ textDecoration: "none", padding: "0 13px", height: "35px", display: "inline-flex", alignItems: "center", justifyContent: "center", color: "#fff", borderRadius: "6px", background: "#1652F0", fontSize: "14px", fontWeight: 400, gap: "6px", whiteSpace: "nowrap" }}>
                       View Profile
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src="/pf-assets/New_Window.svg" alt="" style={{ width: "13px", filter: "brightness(10)" }} />
+                      <img src="/pf-assets/New_Window.svg" alt="" style={{ width: "13px", filter: "invert(1) brightness(2)" }} />
                     </a>
                   </div>
                 </div>
