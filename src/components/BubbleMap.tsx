@@ -28,16 +28,26 @@ function getIslandPositions(width: number, height: number, categories: Category[
   const isPortrait = height > width * 0.8;
 
   if (isPortrait) {
-    // Mobile: vertical stack, 2 columns
-    const cols = 2;
-    const rows = Math.ceil(count / cols);
-    const cellW = width / cols;
-    const cellH = height / rows;
-    return categories.map((cat, i) => ({
-      category: cat,
-      x: cellW * (i % cols) + cellW / 2,
-      y: cellH * Math.floor(i / cols) + cellH / 2,
-    }));
+    // Mobile: organic scatter positions
+    const mobilePositions: Record<string, { fx: number; fy: number }> = {
+      Crypto: { fx: 0.6, fy: 0.08 },
+      Politics: { fx: 0.2, fy: 0.22 },
+      Sports: { fx: 0.75, fy: 0.38 },
+      Finance: { fx: 0.3, fy: 0.48 },
+      "AI & Tech": { fx: 0.7, fy: 0.6 },
+      Culture: { fx: 0.15, fy: 0.7 },
+      Science: { fx: 0.55, fy: 0.78 },
+      "World Events": { fx: 0.25, fy: 0.9 },
+    };
+    const pad = 60;
+    return categories.map((cat) => {
+      const pos = mobilePositions[cat] || { fx: 0.5, fy: 0.5 };
+      return {
+        category: cat,
+        x: pad + pos.fx * (width - pad * 2),
+        y: pad + pos.fy * (height - pad * 2),
+      };
+    });
   }
 
   // Desktop: organic scatter
@@ -164,8 +174,10 @@ export default function BubbleMap() {
 
     const maxPnl = Math.max(...MOCK_TRADERS.map((t) => Math.abs(t.pnl)));
     const isMobile = width < 768;
-    const minR = isMobile ? 18 : 22;
-    const maxR = Math.min(width, height) * (isMobile ? 0.06 : 0.08);
+    // Linear scale on area (sqrt on radius) so visual area is proportional to PnL
+    // Small minimum so low-PnL traders are visibly smaller
+    const minR = isMobile ? 12 : 14;
+    const maxR = Math.min(width, height) * (isMobile ? 0.1 : 0.12);
     const radiusScale = d3.scaleSqrt().domain([0, maxPnl]).range([minR, maxR]);
 
     const nodes: BubbleNode[] = filteredTraders.map((trader) => {
@@ -420,7 +432,7 @@ export default function BubbleMap() {
       <div ref={containerRef} style={{
         position: "relative", overflow: "hidden",
         touchAction: "none",
-        width: dimensions.width > 0 ? `${dimensions.width}px` : "100vw",
+        width: "100%",
         height: dimensions.height > 0 ? `${dimensions.height}px` : "70vh",
       }}>
         <canvas ref={canvasRef} style={{ display: "block", cursor: "grab" }} />

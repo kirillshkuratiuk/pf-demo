@@ -26,9 +26,6 @@ export default function PFShell({ children }: { children: React.ReactNode }) {
                   </span>
                 </Link>
               </div>
-              <nav className="nav-links-header" aria-label="Primary navigation">
-                <Link href="/traders">Traders</Link>
-              </nav>
             </div>
 
             {/* Center: Search */}
