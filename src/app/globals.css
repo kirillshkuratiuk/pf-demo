@@ -36,9 +36,51 @@
   }
 }
 
+
 /* Override PF's overflow:hidden on dashboard wrapper (kills canvas on mobile) */
 .dashboard__wrapper {
   overflow: visible !important;
+}
+
+/* Stat cards in betting activity section */
+.betting-stats-grid .StatsUser-module__rxhoNG__statCard {
+  min-height: 80px !important;
+  padding: 14px 12px !important;
+}
+
+
+/* Betting activity mobile layout */
+@media (max-width: 768px) {
+  .betting-bottom-section {
+    flex-direction: column !important;
+    gap: 16px !important;
+    padding-left: 12px !important;
+    padding-right: 12px !important;
+  }
+
+  .betting-bottom-section .betting-radar {
+    flex: 1 1 100% !important;
+    width: 100% !important;
+  }
+
+  .betting-bottom-section .betting-stats-wrapper {
+    width: 100% !important;
+  }
+
+  .betting-stats-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    width: 100% !important;
+  }
+
+  .betting-header-right {
+    display: none !important;
+  }
+
+  .StatsUser-module__rxhoNG__calendarHeader {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 8px !important;
+  }
 }
 
 /* Our feature card */

@@ -127,10 +127,11 @@ export default function BettingCalendar({ dailyPnl, categories }: Props) {
   }, []);
 
   const weekCount = weeks.length || 53;
-  const availableWidth = (containerWidth || 1100) - labelWidth - 10;
+  const availableWidth = (containerWidth || 1100) - labelWidth - 50; // 20px padding each side + buffer
   const cellPlusGap = availableWidth / weekCount;
   const cellGap = Math.max(2, Math.min(4, cellPlusGap * 0.15));
-  const cellSize = Math.max(10, cellPlusGap - cellGap);
+  // Min 14px so cells stay readable; if too small, container scrolls horizontally
+  const cellSize = Math.max(14, cellPlusGap - cellGap);
 
   // Active radar + stats data
   const activeDay = hoveredDay && hoveredDay.pnl !== 0 ? hoveredDay : null;
@@ -174,7 +175,7 @@ export default function BettingCalendar({ dailyPnl, categories }: Props) {
             {formatPnl(totalPnl)}
           </span>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
+        <div className="betting-header-right" style={{ display: "flex", alignItems: "center", gap: "20px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "14px", color: "var(--text-p-primary, #4b5563)" }}>
             <span>Loss</span>
             <div style={{ display: "flex", gap: "2px" }}>
@@ -192,10 +193,10 @@ export default function BettingCalendar({ dailyPnl, categories }: Props) {
 
       <div className="divider__dashboard" />
 
-      {/* Calendar — full width */}
-      <div ref={calRef} style={{ padding: "20px 0 16px" }}>
+      {/* Calendar — full width, scrollable on small screens */}
+      <div ref={calRef} style={{ padding: "20px 20px 16px 20px", overflowX: "auto" }}>
         <svg
-          width="100%"
+          width={Math.max(availableWidth, labelWidth + weekCount * (cellSize + cellGap))}
           height={headerHeight + 7 * (cellSize + cellGap)}
           style={{ display: "block" }}
         >
@@ -213,12 +214,12 @@ export default function BettingCalendar({ dailyPnl, categories }: Props) {
             </text>
           ))}
           {weeks.map((week, weekIdx) =>
-            week.map((day) => {
+            week.map((day, dayIdx) => {
               const dayOfWeek = new Date(day.date).getDay();
               const row = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
               return (
                 <rect
-                  key={day.date}
+                  key={`${weekIdx}-${dayIdx}`}
                   x={labelWidth + weekIdx * (cellSize + cellGap)}
                   y={headerHeight + row * (cellSize + cellGap)}
                   width={cellSize}
@@ -239,12 +240,12 @@ export default function BettingCalendar({ dailyPnl, categories }: Props) {
 
       <div className="divider__dashboard" />
 
-      {/* Bottom section: Radar + Stats side by side */}
-      <div style={{ display: "flex", gap: "40px", padding: "20px 0 12px", alignItems: "flex-start" }}>
+      {/* Bottom section: Radar + Stats */}
+      <div className="betting-bottom-section" style={{ display: "flex", gap: "40px", padding: "20px 20px 12px 20px", alignItems: "flex-start" }}>
 
         {/* Category Radar — larger */}
         {radarChartData && (
-          <div style={{ flex: "0 0 360px" }}>
+          <div className="betting-radar" style={{ flex: "0 0 360px" }}>
             <div style={{
               fontSize: "13px", fontWeight: 500, color: "var(--text-h1-primary, #0f151b)",
               marginBottom: "8px",
@@ -259,7 +260,7 @@ export default function BettingCalendar({ dailyPnl, categories }: Props) {
             </div>
             <div style={{ height: 280 }}>
               <ResponsiveContainer width="100%" height="100%">
-                <RadarChart data={radarChartData} cx="50%" cy="50%" outerRadius="75%">
+                <RadarChart key="category-radar" data={radarChartData} cx="50%" cy="50%" outerRadius="75%">
                   <PolarGrid stroke="var(--border-color, #e0e0e0)" />
                   <PolarAngleAxis
                     dataKey="category"
@@ -272,8 +273,7 @@ export default function BettingCalendar({ dailyPnl, categories }: Props) {
                     fill="var(--accent-color, #284b63)"
                     fillOpacity={0.12}
                     strokeWidth={1.5}
-                    isAnimationActive={true}
-                    animationDuration={200}
+                    isAnimationActive={false}
                   />
                   <Tooltip
                     contentStyle={{
@@ -296,7 +296,7 @@ export default function BettingCalendar({ dailyPnl, categories }: Props) {
         )}
 
         {/* Stats cards */}
-        <div style={{ flex: "1 1 auto", minWidth: 0 }}>
+        <div className="betting-stats-wrapper" style={{ flex: "1 1 auto", minWidth: 0 }}>
           <div style={{
             fontSize: "13px", fontWeight: 500, color: "var(--text-h1-primary, #0f151b)",
             marginBottom: "8px",
@@ -313,7 +313,7 @@ export default function BettingCalendar({ dailyPnl, categories }: Props) {
             )}
           </div>
 
-          <div className="StatsUser-module__rxhoNG__performanceGrid" style={{ gridTemplateColumns: "repeat(3, 1fr)" }}>
+          <div className="StatsUser-module__rxhoNG__performanceGrid betting-stats-grid" style={{ gridTemplateColumns: "repeat(3, 1fr)" }}>
             <div className="StatsUser-module__rxhoNG__statCard">
               <div className="StatsUser-module__rxhoNG__statLabel">PnL</div>
               <div className={`StatsUser-module__rxhoNG__statValue ${(activeDay ? activeDay.pnl : totalPnl) >= 0 ? "StatsUser-module__rxhoNG__positive" : "StatsUser-module__rxhoNG__negative"}`}>
