@@ -25,9 +25,15 @@
   display: none !important;
 }
 
-/* Ensure container is full width on mobile */
+/* Container padding — match PF's desktop spacing */
 .dashboard__wrapper .container {
-  padding: 0 8px !important;
+  padding: 0 20px !important;
+}
+
+@media (min-width: 769px) {
+  .dashboard__wrapper .container {
+    padding: 0 28px !important;
+  }
 }
 
 /* Override PF's overflow:hidden on dashboard wrapper (kills canvas on mobile) */

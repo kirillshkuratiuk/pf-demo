@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useCallback } from "react";
+import { useMemo, useState, useCallback, useRef, useEffect } from "react";
 import {
   Radar, RadarChart, PolarGrid, PolarAngleAxis,
   ResponsiveContainer, Tooltip,
@@ -25,28 +25,41 @@ function getColor(pnl: number, maxAbsPnl: number): string {
   }
 }
 
-// Simulate a daily category breakdown based on the day's PnL and overall distribution
+// Simulate daily stats from PnL + date seed
+function getDayStats(date: string, pnl: number) {
+  const seed = date.split("-").reduce((a, b) => a + parseInt(b), 0);
+  const absPnl = Math.abs(pnl);
+  return {
+    trades: pnl === 0 ? 0 : Math.max(1, Math.round(3 + Math.sin(seed) * 8 + absPnl / 3000)),
+    volume: pnl === 0 ? 0 : Math.round(absPnl * (2.5 + Math.sin(seed * 1.3) * 1.5)),
+    bestMultiplier: pnl === 0 ? null : +(1 + Math.abs(Math.sin(seed * 0.7)) * 3.5).toFixed(2),
+    worstMultiplier: pnl === 0 ? null : +(0.1 + Math.abs(Math.cos(seed * 0.9)) * 0.8).toFixed(2),
+    marketsTraded: pnl === 0 ? 0 : Math.max(1, Math.round(2 + Math.sin(seed * 2.1) * 4)),
+    winRate: pnl === 0 ? null : Math.round(40 + Math.sin(seed * 0.5) * 30 + (pnl > 0 ? 15 : -10)),
+  };
+}
+
+// Simulate daily category breakdown
 function getDailyCategories(
-  date: string,
-  dayPnl: number,
+  date: string, dayPnl: number,
   overallCategories: { name: string; positions: number; pnl: number }[],
 ) {
-  // Use date as seed for deterministic "randomness"
   const seed = date.split("-").reduce((a, b) => a + parseInt(b), 0);
   const total = overallCategories.reduce((s, c) => s + c.positions, 0);
-
   return overallCategories.map((c, i) => {
-    // Base weight from overall distribution
     const baseWeight = c.positions / total;
-    // Add date-seeded variation (±40%)
     const variation = Math.sin(seed * (i + 1) * 0.7) * 0.4;
     const weight = Math.max(0.02, baseWeight + variation * baseWeight);
-    // Scale to daily positions (roughly 5-30 trades per day)
     const dailyPositions = Math.max(0, Math.round(weight * (8 + Math.abs(dayPnl) / 2000)));
     const dailyPnl = Math.round(dayPnl * weight * (1 + Math.sin(seed * (i + 2)) * 0.3));
-
     return { name: c.name, positions: dailyPositions, pnl: dailyPnl };
   });
+}
+
+function formatVolume(v: number): string {
+  if (v >= 1_000_000) return `$${(v / 1_000_000).toFixed(1)}M`;
+  if (v >= 1_000) return `$${(v / 1_000).toFixed(1)}K`;
+  return `$${v}`;
 }
 
 export default function BettingCalendar({ dailyPnl, categories }: Props) {
@@ -95,32 +108,49 @@ export default function BettingCalendar({ dailyPnl, categories }: Props) {
       };
     }, [dailyPnl]);
 
-  const cellSize = 22;
-  const cellGap = 4;
-  const labelWidth = 36;
+  const labelWidth = 42;
   const headerHeight = 22;
+  // Calculate cell size to fill available width
+  const [containerWidth, setContainerWidth] = useState(0);
+  const calRef = useRef<HTMLDivElement>(null);
 
-  // Radar data: use daily breakdown when hovering, otherwise overall
-  const activeRadarData = useMemo(() => {
+  useEffect(() => {
+    if (!calRef.current) return;
+    const measure = () => {
+      const w = calRef.current?.clientWidth || 0;
+      if (w > 0) setContainerWidth(w);
+    };
+    measure();
+    const timers = [50, 200, 500].map(ms => setTimeout(measure, ms));
+    window.addEventListener("resize", measure);
+    return () => { window.removeEventListener("resize", measure); timers.forEach(clearTimeout); };
+  }, []);
+
+  const weekCount = weeks.length || 53;
+  const availableWidth = (containerWidth || 1100) - labelWidth - 10;
+  const cellPlusGap = availableWidth / weekCount;
+  const cellGap = Math.max(2, Math.min(4, cellPlusGap * 0.15));
+  const cellSize = Math.max(10, cellPlusGap - cellGap);
+
+  // Active radar + stats data
+  const activeDay = hoveredDay && hoveredDay.pnl !== 0 ? hoveredDay : null;
+  const dayStats = activeDay ? getDayStats(activeDay.date, activeDay.pnl) : null;
+
+  const radarData = useMemo(() => {
     if (!categories) return null;
-    if (hoveredDay && hoveredDay.pnl !== 0) {
-      return getDailyCategories(hoveredDay.date, hoveredDay.pnl, categories);
+    if (activeDay) {
+      return getDailyCategories(activeDay.date, activeDay.pnl, categories);
     }
-    return categories.map((c) => ({
-      name: c.name,
-      positions: c.positions,
-      pnl: c.pnl,
-    }));
-  }, [categories, hoveredDay]);
+    return categories.map((c) => ({ name: c.name, positions: c.positions, pnl: c.pnl }));
+  }, [categories, activeDay]);
 
-  const radarChartData = activeRadarData?.map((c) => ({
-    category: c.name,
-    positions: c.positions,
-    pnl: c.pnl,
+  const radarChartData = radarData?.map((c) => ({
+    category: c.name, positions: c.positions, pnl: c.pnl,
   }));
 
-  const svgWidth = labelWidth + weeks.length * (cellSize + cellGap);
-  const svgHeight = headerHeight + 7 * (cellSize + cellGap);
+  const statsLabel = activeDay
+    ? new Date(activeDay.date).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" })
+    : "All Time";
 
   const handleDayEnter = useCallback((e: React.MouseEvent<SVGRectElement>, day: { date: string; pnl: number }) => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -131,10 +161,6 @@ export default function BettingCalendar({ dailyPnl, categories }: Props) {
       y: rect.top - (parent?.top || 0) - 8,
     });
   }, [cellSize]);
-
-  const radarLabel = hoveredDay && hoveredDay.pnl !== 0
-    ? new Date(hoveredDay.date).toLocaleDateString("en-US", { month: "short", day: "numeric" })
-    : "All Time";
 
   return (
     <div className="StatsUser-module__rxhoNG__StatsPerformanceWrapper" style={{ position: "relative" }}>
@@ -166,67 +192,72 @@ export default function BettingCalendar({ dailyPnl, categories }: Props) {
 
       <div className="divider__dashboard" />
 
-      {/* Content row */}
-      <div style={{ display: "flex", alignItems: "center", gap: "0px", padding: "20px 0 8px" }}>
-        {/* Calendar grid */}
-        <div style={{ flex: "1 1 auto", minWidth: 0, overflowX: "auto" }}>
-          <svg
-            width={svgWidth}
-            height={svgHeight}
-            style={{ display: "block" }}
-          >
-            {monthLabels.map((label, i) => (
-              <text key={i} x={labelWidth + label.weekIndex * (cellSize + cellGap)} y={12}
-                fill="var(--text-p-primary, #4b5563)" fontSize="13" fontWeight="500">
-                {label.month}
-              </text>
-            ))}
-            {DAYS.map((day, i) => (
-              <text key={i} x={0}
-                y={headerHeight + i * (cellSize + cellGap) + cellSize * 0.7}
-                fill="var(--text-p-primary, #4b5563)" fontSize="13">
-                {day}
-              </text>
-            ))}
-            {weeks.map((week, weekIdx) =>
-              week.map((day) => {
-                const dayOfWeek = new Date(day.date).getDay();
-                const row = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
-                return (
-                  <rect
-                    key={day.date}
-                    x={labelWidth + weekIdx * (cellSize + cellGap)}
-                    y={headerHeight + row * (cellSize + cellGap)}
-                    width={cellSize}
-                    height={cellSize}
-                    rx={3}
-                    fill={getColor(day.pnl, maxAbsPnl)}
-                    stroke={hoveredDay?.date === day.date ? "var(--text-h1-primary, #0f151b)" : "transparent"}
-                    strokeWidth={1.5}
-                    style={{ cursor: "pointer", transition: "all 0.1s" }}
-                    onMouseEnter={(e) => handleDayEnter(e, day)}
-                    onMouseLeave={() => setHoveredDay(null)}
-                  />
-                );
-              })
-            )}
-          </svg>
-        </div>
+      {/* Calendar — full width */}
+      <div ref={calRef} style={{ padding: "20px 0 16px" }}>
+        <svg
+          width="100%"
+          height={headerHeight + 7 * (cellSize + cellGap)}
+          style={{ display: "block" }}
+        >
+          {monthLabels.map((label, i) => (
+            <text key={i} x={labelWidth + label.weekIndex * (cellSize + cellGap)} y={12}
+              fill="var(--text-p-primary, #4b5563)" fontSize="13" fontWeight="500">
+              {label.month}
+            </text>
+          ))}
+          {DAYS.map((day, i) => (
+            <text key={i} x={0}
+              y={headerHeight + i * (cellSize + cellGap) + cellSize * 0.7}
+              fill="var(--text-p-primary, #4b5563)" fontSize="13">
+              {day}
+            </text>
+          ))}
+          {weeks.map((week, weekIdx) =>
+            week.map((day) => {
+              const dayOfWeek = new Date(day.date).getDay();
+              const row = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+              return (
+                <rect
+                  key={day.date}
+                  x={labelWidth + weekIdx * (cellSize + cellGap)}
+                  y={headerHeight + row * (cellSize + cellGap)}
+                  width={cellSize}
+                  height={cellSize}
+                  rx={3}
+                  fill={getColor(day.pnl, maxAbsPnl)}
+                  stroke={hoveredDay?.date === day.date ? "var(--text-h1-primary, #0f151b)" : "transparent"}
+                  strokeWidth={1.5}
+                  style={{ cursor: "pointer", transition: "all 0.1s" }}
+                  onMouseEnter={(e) => handleDayEnter(e, day)}
+                  onMouseLeave={() => setHoveredDay(null)}
+                />
+              );
+            })
+          )}
+        </svg>
+      </div>
 
-        {/* Category Radar */}
+      <div className="divider__dashboard" />
+
+      {/* Bottom section: Radar + Stats side by side */}
+      <div style={{ display: "flex", gap: "40px", padding: "20px 0 12px", alignItems: "flex-start" }}>
+
+        {/* Category Radar — larger */}
         {radarChartData && (
-          <div style={{ flex: "0 0 340px", position: "relative" }}>
-            {/* Label showing what the radar currently reflects */}
+          <div style={{ flex: "0 0 360px" }}>
             <div style={{
-              textAlign: "center", fontSize: "12px", fontWeight: 500,
-              color: "var(--text-p-primary, #4b5563)",
-              marginBottom: "-4px",
+              fontSize: "13px", fontWeight: 500, color: "var(--text-h1-primary, #0f151b)",
+              marginBottom: "8px",
               transition: "all 0.15s",
-              opacity: hoveredDay && hoveredDay.pnl !== 0 ? 1 : 0.5,
             }}>
-              {radarLabel}
+              Market Categories
+              {activeDay && (
+                <span style={{ color: "#999", fontWeight: 400, marginLeft: "6px" }}>
+                  · {new Date(activeDay.date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                </span>
+              )}
             </div>
-            <div style={{ height: svgHeight - 10 }}>
+            <div style={{ height: 280 }}>
               <ResponsiveContainer width="100%" height="100%">
                 <RadarChart data={radarChartData} cx="50%" cy="50%" outerRadius="75%">
                   <PolarGrid stroke="var(--border-color, #e0e0e0)" />
@@ -248,17 +279,14 @@ export default function BettingCalendar({ dailyPnl, categories }: Props) {
                     contentStyle={{
                       backgroundColor: "#fff",
                       border: "1px solid var(--border-color, #e0e0e0)",
-                      borderRadius: "10px",
-                      fontSize: "13px",
-                      padding: "10px 14px",
+                      borderRadius: "10px", fontSize: "13px", padding: "10px 14px",
                     }}
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     formatter={(value: any, _name: any, props: any) => {
                       const total = radarChartData.reduce((s, c) => s + c.positions, 0);
                       const pct = total > 0 ? Math.round((value / total) * 100) : 0;
                       const pnl = props?.payload?.pnl ?? 0;
-                      const pnlStr = formatPnl(pnl);
-                      return [`${value} positions (${pct}%) · ${pnlStr}`, props?.payload?.category];
+                      return [`${value} positions (${pct}%) · ${formatPnl(pnl)}`, props?.payload?.category];
                     }}
                   />
                 </RadarChart>
@@ -266,9 +294,85 @@ export default function BettingCalendar({ dailyPnl, categories }: Props) {
             </div>
           </div>
         )}
+
+        {/* Stats cards */}
+        <div style={{ flex: "1 1 auto", minWidth: 0 }}>
+          <div style={{
+            fontSize: "13px", fontWeight: 500, color: "var(--text-h1-primary, #0f151b)",
+            marginBottom: "8px",
+            transition: "all 0.15s",
+          }}>
+            {statsLabel}
+            {activeDay && (
+              <span style={{
+                marginLeft: "8px", fontWeight: 600,
+                color: activeDay.pnl >= 0 ? "#30A159" : "#ef4444",
+              }}>
+                {formatPnl(activeDay.pnl)}
+              </span>
+            )}
+          </div>
+
+          <div className="StatsUser-module__rxhoNG__performanceGrid" style={{ gridTemplateColumns: "repeat(3, 1fr)" }}>
+            <div className="StatsUser-module__rxhoNG__statCard">
+              <div className="StatsUser-module__rxhoNG__statLabel">PnL</div>
+              <div className={`StatsUser-module__rxhoNG__statValue ${(activeDay ? activeDay.pnl : totalPnl) >= 0 ? "StatsUser-module__rxhoNG__positive" : "StatsUser-module__rxhoNG__negative"}`}>
+                {formatPnl(activeDay ? activeDay.pnl : totalPnl)}
+              </div>
+            </div>
+            <div className="StatsUser-module__rxhoNG__statCard">
+              <div className="StatsUser-module__rxhoNG__statLabel">Volume</div>
+              <div className="StatsUser-module__rxhoNG__statValue" style={{ color: "var(--text-h1-primary)" }}>
+                {dayStats ? formatVolume(dayStats.volume) : formatVolume(dailyPnl.reduce((s, d) => s + Math.abs(d.pnl) * 3, 0))}
+              </div>
+            </div>
+            <div className="StatsUser-module__rxhoNG__statCard">
+              <div className="StatsUser-module__rxhoNG__statLabel">Trades</div>
+              <div className="StatsUser-module__rxhoNG__statValue" style={{ color: "var(--text-h1-primary)" }}>
+                {dayStats ? dayStats.trades : dailyPnl.filter(d => d.pnl !== 0).length}
+              </div>
+            </div>
+            <div className="StatsUser-module__rxhoNG__statCard">
+              <div className="StatsUser-module__rxhoNG__statLabel">Markets</div>
+              <div className="StatsUser-module__rxhoNG__statValue" style={{ color: "var(--text-h1-primary)" }}>
+                {dayStats ? dayStats.marketsTraded : categories?.reduce((s, c) => s + c.positions, 0)?.toLocaleString() || "—"}
+              </div>
+            </div>
+            <div className="StatsUser-module__rxhoNG__statCard">
+              <div className="StatsUser-module__rxhoNG__statLabel">Win Rate</div>
+              <div className={`StatsUser-module__rxhoNG__statValue ${(dayStats?.winRate ?? Math.round(winDays / (winDays + lossDays) * 100)) >= 50 ? "StatsUser-module__rxhoNG__positive" : "StatsUser-module__rxhoNG__negative"}`}>
+                {dayStats?.winRate != null ? `${dayStats.winRate}%` : `${Math.round(winDays / (winDays + lossDays) * 100)}%`}
+              </div>
+            </div>
+            <div className="StatsUser-module__rxhoNG__statCard">
+              <div className="StatsUser-module__rxhoNG__statLabel">Avg Trade Size</div>
+              <div className="StatsUser-module__rxhoNG__statValue" style={{ color: "var(--text-h1-primary)" }}>
+                {dayStats ? formatVolume(dayStats.trades > 0 ? Math.round(dayStats.volume / dayStats.trades) : 0) : formatVolume(Math.round(dailyPnl.reduce((s, d) => s + Math.abs(d.pnl) * 3, 0) / dailyPnl.filter(d => d.pnl !== 0).length))}
+              </div>
+            </div>
+            <div className="StatsUser-module__rxhoNG__statCard">
+              <div className="StatsUser-module__rxhoNG__statLabel">Best Multiplier</div>
+              <div className="StatsUser-module__rxhoNG__statValue StatsUser-module__rxhoNG__positive">
+                {dayStats?.bestMultiplier ? `${dayStats.bestMultiplier}x` : "4.2x"}
+              </div>
+            </div>
+            <div className="StatsUser-module__rxhoNG__statCard">
+              <div className="StatsUser-module__rxhoNG__statLabel">Worst Multiplier</div>
+              <div className="StatsUser-module__rxhoNG__statValue StatsUser-module__rxhoNG__negative">
+                {dayStats?.worstMultiplier ? `${dayStats.worstMultiplier}x` : "0.3x"}
+              </div>
+            </div>
+            <div className="StatsUser-module__rxhoNG__statCard">
+              <div className="StatsUser-module__rxhoNG__statLabel">Portfolio Value</div>
+              <div className="StatsUser-module__rxhoNG__statValue" style={{ color: "var(--text-h1-primary)" }}>
+                {dayStats ? formatVolume(Math.round(234647 + (activeDay?.pnl || 0) * 0.3)) : "$234.6K"}
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
-      {/* Day tooltip */}
+      {/* Day tooltip on calendar */}
       {hoveredDay && (
         <div style={{
           position: "absolute", zIndex: 50, left: hoveredDay.x, top: hoveredDay.y,
