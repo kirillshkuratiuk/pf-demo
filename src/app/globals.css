@@ -36,9 +36,9 @@ body {
   gap: 0 !important;
 }
 
-/* Container padding — match PF's actual spacing */
+/* Container padding */
 .dashboard__wrapper .container {
-  padding: 0 11px !important;
+  padding: 0 20px !important;
 }
 
 

@@ -394,7 +394,7 @@ export default function BubbleMap() {
       {/* Filter bar */}
       <div style={{
         display: "flex", alignItems: "center", justifyContent: "space-between",
-        padding: "12px 0", flexWrap: "wrap", gap: "8px",
+        padding: "12px 15px", flexWrap: "wrap", gap: "8px",
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
           <span style={{ fontSize: "14px", fontWeight: 500, color: "#0f151b", marginRight: "4px" }}>
