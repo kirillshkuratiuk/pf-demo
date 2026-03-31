@@ -5,7 +5,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "PredictFolio Feature Demo",
   description:
-    "Feature concepts for PredictFolio — Bubble Map, Betting Calendar, Trader DNA",
+    "Feature concepts for PredictFolio",
 };
 
 export default function RootLayout({
