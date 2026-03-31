@@ -290,15 +290,15 @@ export default function BubbleMap() {
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
 
-        if (r >= 30) {
-          // Name + PnL
-          const nameSize = Math.max(9, Math.min(14, r * 0.28));
-          const pnlSize = Math.max(8, Math.min(12, r * 0.24));
+        {
+          // Always show name + PnL
+          const nameSize = Math.max(7, Math.min(14, r * 0.28));
+          const pnlSize = Math.max(6, Math.min(12, r * 0.24));
           const gap = nameSize * 0.15;
 
-          const maxChars = Math.max(4, Math.floor(r * 0.14) + 3);
+          const maxChars = Math.max(3, Math.floor(r * 0.14) + 3);
           const name = node.trader.name.length > maxChars
-            ? node.trader.name.slice(0, maxChars - 1) + "..."
+            ? node.trader.name.slice(0, maxChars - 1) + "…"
             : node.trader.name;
 
           ctx.fillStyle = textOnPhoto ? "#fff" : "#555";
@@ -310,15 +310,6 @@ export default function BubbleMap() {
             : (node.trader.pnl >= 0 ? "#30A159" : "#ef4444");
           ctx.font = `500 ${pnlSize}px -apple-system, system-ui, sans-serif`;
           ctx.fillText(formatPnl(node.trader.pnl), 0, textOnPhoto ? r * 0.15 + nameSize + gap : pnlSize * 0.5 + gap);
-
-        } else {
-          // Small: just PnL
-          const pnlSize = Math.max(7, r * 0.32);
-          ctx.fillStyle = textOnPhoto
-            ? "#fff"
-            : (node.trader.pnl >= 0 ? "#30A159" : "#ef4444");
-          ctx.font = `600 ${pnlSize}px -apple-system, system-ui, sans-serif`;
-          ctx.fillText(formatPnl(node.trader.pnl), 0, textOnPhoto ? r * 0.2 : 0);
         }
 
         ctx.restore();
@@ -390,11 +381,11 @@ export default function BubbleMap() {
   }, [dimensions, findNodeAt, activeCategory]);
 
   return (
-    <div style={{ position: "relative" }}>
+    <div style={{ position: "relative", padding: "0 20px 20px 20px" }}>
       {/* Filter bar */}
       <div style={{
         display: "flex", alignItems: "center", justifyContent: "space-between",
-        padding: "12px 15px", flexWrap: "wrap", gap: "8px",
+        padding: "12px 0", flexWrap: "wrap", gap: "8px",
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
           <span style={{ fontSize: "14px", fontWeight: 500, color: "#0f151b", marginRight: "4px" }}>
@@ -426,7 +417,6 @@ export default function BubbleMap() {
         </span>
       </div>
 
-      <div style={{ height: "1px", background: "#f2f2f2" }} />
 
       {/* Canvas */}
       <div ref={containerRef} style={{
